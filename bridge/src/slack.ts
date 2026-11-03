@@ -79,8 +79,10 @@ export class SlackBridge {
 		const threadTs = event.thread_ts ?? event.ts;
 		const linked = this.store.t3ThreadFor(event.channel, threadTs);
 		const isMention = event.type === "app_mention";
-		// Plain thread replies only count inside threads the bridge already owns.
-		if (!isMention && !linked) return;
+		// Plain messages count only as replies inside threads the bridge owns. A mention also arrives as a
+		// `message` event; that copy is skipped so the app_mention handler is the only one that acts on it.
+		const isThreadReply = Boolean(event.thread_ts) && event.thread_ts !== event.ts;
+		if (!isMention && (!linked || !isThreadReply || /<@[A-Z0-9]+>/.test(event.text ?? ""))) return;
 		if (!this.config.allowedUsers.has(event.user)) {
 			if (isMention) await this.post(event.channel, threadTs, "You are not allowed to use this bridge.");
 			return;

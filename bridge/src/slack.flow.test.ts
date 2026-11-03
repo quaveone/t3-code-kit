@@ -86,6 +86,26 @@ describe("SlackBridge flow", () => {
 		expect(calls).toContain("send:thread-1:also add a test");
 	});
 
+	test("skips the message-event copy of a mention so T3 gets it once", async () => {
+		const callCount = calls.length;
+		await bridge.handle(
+			signedRequest({
+				type: "event_callback",
+				event_id: "Ev4",
+				event: { type: "message", user: "U1", text: "<@B1> [furia] fix it", channel: "C1", ts: "100.1" },
+			}),
+		);
+		await bridge.handle(
+			signedRequest({
+				type: "event_callback",
+				event_id: "Ev5",
+				event: { type: "message", user: "U1", text: "<@B1> more", channel: "C1", ts: "100.7", thread_ts: "100.1" },
+			}),
+		);
+		await Bun.sleep(50);
+		expect(calls.length).toBe(callCount);
+	});
+
 	test("ignores duplicate deliveries and unknown users", async () => {
 		const callCount = calls.length;
 		await bridge.handle(
