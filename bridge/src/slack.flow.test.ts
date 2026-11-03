@@ -64,12 +64,12 @@ describe("SlackBridge flow", () => {
 			signedRequest({
 				type: "event_callback",
 				event_id: "Ev1",
-				event: { type: "app_mention", user: "U1", text: "<@B1> [furia] fix it", channel: "C1", ts: "100.1" },
+				event: { type: "app_mention", user: "U1", text: "<@B1> [web] fix it", channel: "C1", ts: "100.1" },
 			}),
 		);
 		expect(response.status).toBe(200);
 		await until(() => posts.length >= 2);
-		expect(calls).toContain("start:furia:fix it");
+		expect(calls).toContain("start:web:fix it");
 		expect(posts.at(-1)).toMatchObject({ channel: "C1", thread_ts: "100.1" });
 		expect(posts.at(-1)?.text).toContain("answer for thread-1");
 	});
@@ -93,7 +93,7 @@ describe("SlackBridge flow", () => {
 			signedRequest({
 				type: "event_callback",
 				event_id: "Ev4",
-				event: { type: "message", user: "U1", text: "<@UBOT> [furia] fix it", channel: "C1", ts: "100.1" },
+				event: { type: "message", user: "U1", text: "<@UBOT> [web] fix it", channel: "C1", ts: "100.1" },
 			}),
 		);
 		await bridge.handle(

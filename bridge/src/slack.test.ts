@@ -23,8 +23,8 @@ describe("verifySlackSignature", () => {
 
 describe("parseMention", () => {
 	test("reads a bracketed project", () => {
-		expect(parseMention("<@U123> [palmeiras-calendar-sync] fix the sync")).toEqual({
-			project: "palmeiras-calendar-sync",
+		expect(parseMention("<@U123> [my-service] fix the sync")).toEqual({
+			project: "my-service",
 			message: "fix the sync",
 		});
 	});
