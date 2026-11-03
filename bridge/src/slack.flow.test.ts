@@ -93,14 +93,14 @@ describe("SlackBridge flow", () => {
 			signedRequest({
 				type: "event_callback",
 				event_id: "Ev4",
-				event: { type: "message", user: "U1", text: "<@B1> [furia] fix it", channel: "C1", ts: "100.1" },
+				event: { type: "message", user: "U1", text: "<@UBOT> [furia] fix it", channel: "C1", ts: "100.1" },
 			}),
 		);
 		await bridge.handle(
 			signedRequest({
 				type: "event_callback",
 				event_id: "Ev5",
-				event: { type: "message", user: "U1", text: "<@B1> more", channel: "C1", ts: "100.7", thread_ts: "100.1" },
+				event: { type: "message", user: "U1", text: "<@UBOT> more", channel: "C1", ts: "100.7", thread_ts: "100.1" },
 			}),
 		);
 		await Bun.sleep(50);
@@ -113,7 +113,7 @@ describe("SlackBridge flow", () => {
 			signedRequest({
 				type: "event_callback",
 				event_id: "Ev6",
-				event: { type: "message", user: "U1", bot_id: "BOTHER", text: "via app", channel: "C1", ts: "100.8", thread_ts: "100.1" },
+				event: { type: "message", user: "U1", bot_id: "BOTHER", text: "via app *Sent using* <@UCLAUDE>", channel: "C1", ts: "100.8", thread_ts: "100.1" },
 			}),
 		);
 		await bridge.handle(
@@ -125,7 +125,7 @@ describe("SlackBridge flow", () => {
 		);
 		await until(() => calls.length > before);
 		await Bun.sleep(50);
-		expect(calls.slice(before)).toEqual(["send:thread-1:via app"]);
+		expect(calls.slice(before)).toEqual(["send:thread-1:via app *Sent using*"]);
 	});
 
 	test("ignores duplicate deliveries and unknown users", async () => {

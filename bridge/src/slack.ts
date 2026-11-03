@@ -92,14 +92,18 @@ export class SlackBridge {
 		// Messages a person sends through another app carry a bot_id too, so only the bridge's own
 		// user and edits, joins and other subtypes are skipped. SLACK_ALLOWED_USERS still gates requests.
 		if (event.subtype || !event.user || !event.channel || !event.ts) return;
-		if (event.user === (await this.ownUserId())) return;
+		const ownUserId = await this.ownUserId();
+		if (event.user === ownUserId) return;
 		const threadTs = event.thread_ts ?? event.ts;
 		const linked = this.store.t3ThreadFor(event.channel, threadTs);
 		const isMention = event.type === "app_mention";
 		// Plain messages count only as replies inside threads the bridge owns. A mention also arrives as a
 		// `message` event; that copy is skipped so the app_mention handler is the only one that acts on it.
 		const isThreadReply = Boolean(event.thread_ts) && event.thread_ts !== event.ts;
-		if (!isMention && (!linked || !isThreadReply || /<@[A-Z0-9]+>/.test(event.text ?? ""))) return;
+		// Only a mention of this bot marks the message-event copy; other mentions (for example the "Sent
+		// using <@app>" footer some clients add) are ordinary text.
+		const mentionsBot = ownUserId ? (event.text ?? "").includes(`<@${ownUserId}>`) : /<@[A-Z0-9]+>/.test(event.text ?? "");
+		if (!isMention && (!linked || !isThreadReply || mentionsBot)) return;
 		if (!this.config.allowedUsers.has(event.user)) {
 			if (isMention) await this.post(event.channel, threadTs, "You are not allowed to use this bridge.");
 			return;
