@@ -43,7 +43,8 @@ gives them through your secret-input tool.
 { "accountId": "<account>", "solutionSlug": "t3-code", "appName": "t3-<person>", "region": "<region>" }
 ```
 
-Leave the optional inputs `claudeCodeOauthToken` and `githubToken` empty when an agent installs; the person adds the
+Leave the optional inputs (`"inputs": { "claudeCodeOauthToken": "...", "githubToken": "..." }`) out when an agent
+installs; the person adds the
 secrets in step 4. When the **person** installs from the dashboard (**New project → Solutions → T3 Code**), they can
 type both tokens in the form instead and skip step 4.
 
@@ -62,8 +63,10 @@ the catalog's post-install note about the Console: step 7 below pairs without on
 
 ### 2. Wait until it runs
 
-Poll [`get-app-env-status`] every 15 seconds until `currentDeployment.status` is `DEPLOYED` (usually under a
-minute). If it is still not deployed after 10 minutes, check [`get-app-env-pods`]: a pod in `Pending` with no
+Check [`get-app-env-status`] about every 15 seconds until `currentDeployment.status` is `DEPLOYED` (usually one or two
+minutes). Without a wait tool, loop on the host instead, then confirm the status once:
+`until [ "$(curl -s -o /dev/null -w '%{http_code}' https://<host>/)" = 200 ]; do sleep 15; done` (the host is in
+[`get-app-env`] `hosts[0].host`). If it is still not deployed after 10 minutes, check [`get-app-env-pods`]: a pod in `Pending` with no
 `nodeName` means the region cannot provision the volume. Delete the app [`delete-app`] and go back to step 1 with the
 next qualifying region.
 
@@ -103,9 +106,13 @@ Optional, to give the agents the Quave ONE MCP: create an MCP key with only the 
 MCP_SERVERS_JSON={"quave-one":{"url":"https://mcp.quave.cloud/","bearerEnv":"QUAVE_ONE_MCP_KEY"}}
 ```
 
-**Agent:** wait until the person says the secrets are saved. Then confirm with [`list-app-env-variables`] that
-`CLAUDE_CODE_OAUTH_TOKEN` and `GH_TOKEN` exist (values stay masked). If [`get-app-env`] still shows
-`pendingChanges.hasDeployChanges: true`, call [`apply-app-env-changes`]. Then repeat step 2.
+**Agent:** this step is a gate. Wait until the person says the secrets are saved, then confirm with
+[`list-app-env-variables`] that `CLAUDE_CODE_OAUTH_TOKEN` and `GH_TOKEN` exist (values stay masked).
+
+- Missing: tell the person which variable is missing and how to add it (above), and wait. Do steps 5 and 6 meanwhile,
+  but not step 7.
+- Present: if [`get-app-env`] still shows `pendingChanges.hasDeployChanges: true`, call [`apply-app-env-changes`].
+  Then repeat step 2, because saving the secrets restarted the server.
 
 ### 5. Check it is up
 
@@ -134,11 +141,12 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/api/projects/mut
 
 ### 7. Pair the person's apps **(person)**
 
-Do this last: the link below stops working at the next restart. Pairing needs a one-time code, which the server
-prints in its log every time it starts:
+Do this last, only after step 4 is confirmed: saving secrets restarts the server, and a restart invalidates the link
+below. Pairing needs a one-time code, which the server prints in its log every time it starts:
 
 1. [`get-logs`] with `{ "appEnvId": "<env>", "type": "WEB_APP", "search": "Pairing URL" }`. Take the newest line, which
-   looks like `Pairing URL: http://10.x.x.x:3773/pair#token=<code>`.
+   looks like `Pairing URL: http://10.x.x.x:3773/pair#token=<code>`. Its time must be later than the `startedAt` of the
+   running pod in [`get-app-env-pods`]; otherwise it belongs to an earlier start and no longer works.
 2. Replace the internal address with the public host: `https://<host>/pair#token=<code>`.
 3. Send the link to the person privately. They open it in a browser (this pairs the T3 web app), or paste it into the
    T3 desktop or mobile app. The page then shows **Welcome** with **Add project**.
