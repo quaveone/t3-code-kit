@@ -6,13 +6,14 @@ nightlies a day and a few stable releases a week. This repository stays easy to 
 ## Follow stable releases only
 
 - The image installs an official stable release (`ARG T3_VERSION`) and checks it against the release's `SHA256SUMS`.
-- `.github/workflows/t3-release-bump.yml` runs daily. When a new stable release appears it bumps `T3_VERSION`, builds
-  the image, runs `scripts/smoke-image.sh`, and opens a PR. (PRs opened with `GITHUB_TOKEN` do not trigger CI, which
-  is why the workflow tests before it opens the PR.)
+- `.github/workflows/t3-release-bump.yml` runs every 4 hours. When a new stable release of T3 Code (or of the Claude
+  Code `stable` channel) appears, it updates `image/Dockerfile`, builds, runs the smoke test and the bridge contract
+  test, commits to `main` and dispatches CI, which publishes. See [releases.md](releases.md).
 - Never track `main` or nightly builds.
 
-The smoke test checks the contract the bridge relies on: the web app on `/`, 401 without a session, and the MCP
-OAuth metadata. When a release changes an MCP tool the bridge uses, fix the bridge in the same PR.
+The bridge contract test runs a real T3 container and a real bridge through the OAuth sign-in and a full thread
+launch, wait and read. When a release changes an MCP tool the bridge uses, the test fails, nothing is published,
+and an issue is opened; fix the bridge in a normal commit.
 
 ## Where new behaviour goes
 

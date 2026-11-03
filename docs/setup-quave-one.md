@@ -18,9 +18,11 @@ In the dashboard choose **New project → Solutions → T3 Code**, or call `crea
 "t3-code"`. Fill in the optional **Claude Code token** and **GitHub token** inputs. The Solution creates one
 environment with:
 
-- image `ghcr.io/quaveone/t3-code:<t3-version>`, port 3773, health check `GET /`;
+- image `ghcr.io/quaveone/t3-code:stable`, port 3773, health check `GET /`;
 - a persistent volume at `/data`;
 - one container, 4 CPU and 4 GB (8 zClouds).
+
+Then turn on image auto-deploy on the environment so it follows `:stable` [`update-app-env-image-auto-deploy`].
 
 The Quave ONE public docs describe the Solution: <https://docs.quave.one/solutions/t3-code>.
 
@@ -28,11 +30,13 @@ The Quave ONE public docs describe the Solution: <https://docs.quave.one/solutio
 
 1. Create an app with the **Custom** preset and **use image** on, port `3773`, health check path `/`
    [`create-app`].
-2. Create an environment with image `ghcr.io/quaveone/t3-code:<t3-version>` and 8 zClouds [`create-app-env`].
+2. Create an environment with image `ghcr.io/quaveone/t3-code:stable` and 8 zClouds [`create-app-env`].
 3. Turn on a persistent volume at `/data` [`update-app-env-volume`] and size the disk, for example 30 GB
    [`update-app-env-resources`]. A local persistent volume also limits the environment to one container and turns
    off blue-green deploys, which is what T3 needs.
 4. Deploy [`deploy-app-env-image` or `apply-app-env-changes`].
+5. Turn on image auto-deploy so the server follows `:stable` [`update-app-env-image-auto-deploy`]. See
+   [releases.md](releases.md).
 
 To build from source instead of using the published image, deploy the `image/` folder as a Dockerfile app
 (`quaveone deploy` or `request-deploy-storage-key` + `notify-code-upload`).
@@ -94,7 +98,7 @@ In the T3 app choose **Add project**, or ask an agent to clone a repository with
 
 Follow [bridge.md](bridge.md). In short:
 
-1. Create a second app from `ghcr.io/quaveone/t3-bridge:latest` (or the `bridge/` Dockerfile) on port `8787`, health
+1. Create a second app from `ghcr.io/quaveone/t3-bridge:stable` (or the `bridge/` Dockerfile) on port `8787`, health
    check `/healthz`, persistent volume at `/data`, 1 zCloud.
 2. Set `BRIDGE_TOKEN` (secret), `PUBLIC_URL` (the bridge's own HTTPS host) and `T3_MCP_URL`
    (`https://<t3-host>/mcp`).

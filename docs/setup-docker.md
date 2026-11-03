@@ -19,7 +19,7 @@ chmod 600 t3.env
 
 docker run -d --name t3 --restart unless-stopped \
   -p 127.0.0.1:3773:3773 -v t3data:/data --env-file t3.env \
-  ghcr.io/quaveone/t3-code:latest
+  ghcr.io/quaveone/t3-code:stable
 ```
 
 - Publish the port on `127.0.0.1` and reach it through an SSH tunnel or a private network such as Tailscale. Put a
@@ -36,7 +36,7 @@ docker run -d --name t3-bridge --restart unless-stopped \
   -e BRIDGE_TOKEN=$(openssl rand -hex 24) \
   -e PUBLIC_URL=https://bridge.example.com \
   -e T3_MCP_URL=https://t3.example.com/mcp \
-  ghcr.io/quaveone/t3-bridge:latest
+  ghcr.io/quaveone/t3-bridge:stable
 ```
 
 Both URLs must be HTTPS (or `localhost`) for the OAuth sign-in. See [bridge.md](bridge.md).
@@ -44,7 +44,7 @@ Both URLs must be HTTPS (or `localhost`) for the OAuth sign-in. See [bridge.md](
 ## Smoke test
 
 ```sh
-scripts/smoke-image.sh ghcr.io/quaveone/t3-code:latest
+scripts/smoke-image.sh ghcr.io/quaveone/t3-code:stable
 ```
 
 It starts the image on port 13773 and checks `/`, the 401 without a session, the MCP OAuth metadata and the tool

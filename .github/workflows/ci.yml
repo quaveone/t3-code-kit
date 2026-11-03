@@ -1,13 +1,27 @@
 name: CI
 
+# Every push to main is tested and released automatically:
+#   - bridge typecheck and tests;
+#   - T3 image build, smoke test and bridge contract test (bridge <-> T3 MCP, no Claude token needed);
+#   - publish both images; move :stable only when that image's content changed;
+#   - create a GitHub release for each new T3 version.
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+
+env:
+  T3_IMAGE: ghcr.io/quaveone/t3-code
+  BRIDGE_IMAGE: ghcr.io/quaveone/t3-bridge
 
 jobs:
   bridge:
@@ -27,27 +41,85 @@ jobs:
     needs: bridge
     steps:
       - uses: actions/checkout@v4
-      - name: Read the pinned T3 version
-        id: t3
-        run: echo "version=$(sed -n 's/^ARG T3_VERSION=//p' image/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: oven-sh/setup-bun@v2
+      - name: Read versions
+        id: v
+        run: |
+          # Content fingerprints: :stable moves only when these change, so docs-only commits never restart servers.
+          {
+            echo "t3=$(sed -n 's/^ARG T3_VERSION=//p' image/Dockerfile)"
+            echo "claude=$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' image/Dockerfile)"
+            echo "rev=$(git rev-parse --short HEAD)"
+            echo "image_tree=$(git rev-parse HEAD:image)"
+            echo "bridge_tree=$(git rev-parse HEAD:bridge)"
+          } >> "$GITHUB_OUTPUT"
       - name: Build the T3 image
-        run: docker build -t t3-code:ci image
+        run: |
+          docker build -t t3-code:ci \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "kit.t3-version=${{ steps.v.outputs.t3 }}" \
+            --label "kit.claude-code-version=${{ steps.v.outputs.claude }}" \
+            --label "kit.content-tree=${{ steps.v.outputs.image_tree }}" \
+            image
       - name: Smoke test the T3 image
         run: scripts/smoke-image.sh t3-code:ci
+      - name: Bridge contract test
+        run: |
+          (cd bridge && bun install --frozen-lockfile)
+          scripts/bridge-contract-test.sh t3-code:ci
       - name: Build the bridge image
-        run: docker build -t t3-bridge:ci bridge
+        run: |
+          docker build -t t3-bridge:ci \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "kit.content-tree=${{ steps.v.outputs.bridge_tree }}" \
+            bridge
+
       - name: Publish images
-        if: github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
-          T3_VERSION: ${{ steps.t3.outputs.version }}
+          T3: ${{ steps.v.outputs.t3 }}
+          REV: ${{ steps.v.outputs.rev }}
+          IMAGE_TREE: ${{ steps.v.outputs.image_tree }}
+          BRIDGE_TREE: ${{ steps.v.outputs.bridge_tree }}
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          rev="$(git rev-parse --short HEAD)"
-          for tag in "${T3_VERSION}-${rev}" "${T3_VERSION}" latest; do
-            docker tag t3-code:ci "ghcr.io/quaveone/t3-code:${tag}"
-            docker push "ghcr.io/quaveone/t3-code:${tag}"
-          done
-          for tag in "${rev}" latest; do
-            docker tag t3-bridge:ci "ghcr.io/quaveone/t3-bridge:${tag}"
-            docker push "ghcr.io/quaveone/t3-bridge:${tag}"
-          done
+          push() { docker tag "$1" "$2"; docker push -q "$2"; echo "pushed $2"; }
+          # Returns the kit.content-tree label of a published tag, or nothing.
+          published_tree() { docker pull -q "$1" >/dev/null 2>&1 && docker inspect -f '{{ index .Config.Labels "kit.content-tree" }}' "$1" || true; }
+
+          for tag in "${T3}-${REV}" "${T3}" latest; do push t3-code:ci "$T3_IMAGE:$tag"; done
+          if [ "$(published_tree "$T3_IMAGE:stable")" != "$IMAGE_TREE" ]; then
+            push t3-code:ci "$T3_IMAGE:stable"
+          else
+            echo "t3-code:stable already has this content; not moved"
+          fi
+
+          for tag in "${REV}" latest; do push t3-bridge:ci "$BRIDGE_IMAGE:$tag"; done
+          if [ "$(published_tree "$BRIDGE_IMAGE:stable")" != "$BRIDGE_TREE" ]; then
+            push t3-bridge:ci "$BRIDGE_IMAGE:stable"
+          else
+            echo "t3-bridge:stable already has this content; not moved"
+          fi
+
+      - name: Create a release for a new T3 version
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          T3: ${{ steps.v.outputs.t3 }}
+          CLAUDE: ${{ steps.v.outputs.claude }}
+          REV: ${{ steps.v.outputs.rev }}
+        run: |
+          tag="t3-v${T3}"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "release $tag exists"; exit 0; fi
+          gh release create "$tag" --target "${{ github.sha }}" --title "T3 Code ${T3}" --notes "$(cat <<EOF
+          Image built on the unmodified upstream [T3 Code v${T3}](https://github.com/pingdotgg/t3code/releases/tag/v${T3}) stable release.
+
+          - \`${T3_IMAGE}:${T3}-${REV}\` (immutable), \`${T3_IMAGE}:${T3}\`, \`${T3_IMAGE}:stable\`
+          - Claude Code ${CLAUDE}
+          - Passed the image smoke test and the bridge contract test.
+
+          Servers that auto-deploy \`:stable\` pick it up within minutes. See docs/releases.md.
+          EOF
+          )"

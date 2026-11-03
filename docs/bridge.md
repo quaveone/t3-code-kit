@@ -7,7 +7,7 @@ threads. It has no framework and no model of its own: it is an MCP client of T3.
 
 | Setting | Value |
 | --- | --- |
-| Image | `ghcr.io/quaveone/t3-bridge:latest`, or build `bridge/Dockerfile` |
+| Image | `ghcr.io/quaveone/t3-bridge:stable`, or build `bridge/Dockerfile` |
 | Port | `8787` |
 | Health check | `GET /healthz` |
 | Volume | Persistent, at `/data` (holds `bridge.sqlite`) |

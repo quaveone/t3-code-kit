@@ -40,15 +40,10 @@ The health check `GET /` covers restarts.
 
 ## Upgrades
 
-1. The `T3 stable release bump` workflow opens a PR when T3 ships a stable release. It builds the image and runs
-   `scripts/smoke-image.sh` before opening the PR.
-2. Review the upstream release notes and merge. CI publishes `ghcr.io/quaveone/t3-code:<t3-version>-<kit-revision>`,
-   `:<t3-version>` and `:latest`.
-3. Move each server to the new tag on purpose and redeploy. Keep image auto-deploy off.
-4. After the redeploy: `GET /` returns 200, an old thread still opens, and a new thread runs.
-
-Claude Code inside the image is pinned with `ARG CLAUDE_CODE_VERSION` and its auto-updater is off. Bump it in the
-same way.
+Upgrades are automatic. See [releases.md](releases.md) for the whole chain: new T3 and Claude Code stable releases
+are tested and published as `:stable`, and servers with image auto-deploy on `:stable` redeploy within minutes. A
+redeploy interrupts threads that are running at that moment, and rolling back means restoring a snapshot, not
+deploying an older tag over the same volume.
 
 ## Rotating secrets
 
