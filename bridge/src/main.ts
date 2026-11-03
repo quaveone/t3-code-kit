@@ -64,6 +64,11 @@ async function route(request: Request): Promise<Response> {
 	if (path === "/v1/projects" && request.method === "GET") {
 		return Response.json({ projects: await tasks.projects() });
 	}
+	if (path === "/v1/projects" && request.method === "POST") {
+		const body = await json<{ repository?: string; title?: string }>(request);
+		if (!body.repository) throw new UserError("`repository` is required.");
+		return Response.json(await tasks.addProject(body.repository, body.title), { status: 201 });
+	}
 	if (path === "/v1/tasks" && request.method === "POST") {
 		const body = await json<{ project?: string; message?: string; title?: string; baseRef?: string | null; clientRequestId?: string }>(request);
 		if (!body.message?.trim()) throw new UserError("`message` is required.");

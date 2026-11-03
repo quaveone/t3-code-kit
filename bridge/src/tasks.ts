@@ -27,6 +27,21 @@ export class Tasks {
 		return result.projects ?? result.items ?? [];
 	}
 
+	/** Clones `owner/name` from GitHub into the T3 server and registers it as a project. */
+	async addProject(repository: string, title?: string): Promise<Project> {
+		if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new UserError("`repository` must look like owner/name.");
+		const name = title ?? repository.split("/")[1] ?? repository;
+		const existing = (await this.projects()).find((p) => p.title === name);
+		if (existing) return existing;
+		const destinationPath = `${this.config.reposRoot}/${name}`;
+		await this.t3.call(
+			"t3_project_clone",
+			{ provider: "github", repository, destinationPath, protocol: "https" },
+			10 * 60 * 1000,
+		);
+		return (await this.t3.call("t3_project_create", { title: name, workspaceRoot: destinationPath })) as Project;
+	}
+
 	/** Resolves a project by id or case-insensitive title, falling back to DEFAULT_PROJECT. */
 	async resolveProject(nameOrId: string | undefined): Promise<Project> {
 		const wanted = (nameOrId ?? this.config.defaultProject)?.toLowerCase();

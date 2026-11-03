@@ -85,6 +85,7 @@ Every `/v1` route needs `Authorization: Bearer <BRIDGE_TOKEN>`.
 | Route | What it does |
 | --- | --- |
 | `GET /v1/projects` | Lists T3 projects. |
+| `POST /v1/projects` `{repository, title?}` | Clones `owner/name` from GitHub into the T3 server (`T3_REPOS_ROOT`, default `/data/home/repos`) and registers it as a project. Returns the existing project when the title is taken. |
 | `POST /v1/tasks` `{project?, message, title?, baseRef?, clientRequestId?}` | Starts a T3 thread and returns `202 {taskId, projectId}`. `project` is a T3 project id or title (default `DEFAULT_PROJECT`). The thread runs in a new worktree from `baseRef` (default `DEFAULT_BASE_REF`, `main`); `baseRef: null` uses the project checkout. Retrying with the same `clientRequestId` does not start a second thread. |
 | `GET /v1/tasks/:id` | Reads the latest messages of the thread. |
 | `POST /v1/tasks/:id/messages` `{message}` | Sends a follow-up message to the same thread. |

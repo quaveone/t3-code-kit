@@ -13,6 +13,7 @@ export type Config = {
 	statePath: string;
 	defaultProject: string | undefined;
 	defaultBaseRef: string;
+	reposRoot: string;
 	runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
 	waitTimeoutMs: number;
 	slack: SlackConfig | undefined;
@@ -46,6 +47,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		statePath: env.STATE_PATH ?? "/data/bridge.sqlite",
 		defaultProject: env.DEFAULT_PROJECT?.trim() || undefined,
 		defaultBaseRef: env.DEFAULT_BASE_REF?.trim() || "main",
+		reposRoot: (env.T3_REPOS_ROOT?.trim() || "/data/home/repos").replace(/\/$/, ""),
 		runtimeMode,
 		waitTimeoutMs: Number(env.WAIT_TIMEOUT_MS ?? 2 * 60 * 60 * 1000),
 		slack:
