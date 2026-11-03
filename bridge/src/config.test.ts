@@ -13,6 +13,11 @@ describe("loadConfig", () => {
 		expect(config.publicUrl).toBe("https://bridge.example.com");
 		expect(config.runtimeMode).toBe("full-access");
 		expect(config.slack).toBeUndefined();
+		expect(config.modelSelection).toEqual({
+			instanceId: "claudeAgent",
+			model: "claude-opus-5-5",
+			options: { effort: "medium" },
+		});
 	});
 	test("rejects a short bridge token", () => {
 		expect(() => loadConfig({ ...base, BRIDGE_TOKEN: "short" })).toThrow("at least 32");

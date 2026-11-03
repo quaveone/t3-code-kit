@@ -119,7 +119,7 @@ channel, and set the three `SLACK_*` variables.
 | `STATE_PATH` | No | SQLite file for the OAuth grant and Slack thread links. Default `/data/bridge.sqlite`, on a persistent volume. |
 | `DEFAULT_PROJECT` | No | T3 project id or title used when a request names none. |
 | `DEFAULT_BASE_REF` | No | Base for new worktrees, default `main`. |
-| `T3_MODEL`, `T3_PROVIDER_INSTANCE` | No | Model for new threads and for projects the bridge creates. Default `claude-sonnet-5-5` on `claudeAgent` (lighter on the subscription quota). |
+| `T3_MODEL`, `T3_MODEL_EFFORT`, `T3_PROVIDER_INSTANCE` | No | Model for new threads and for projects the bridge creates. Default `claude-opus-5-5` with effort `medium` on `claudeAgent`. |
 | `T3_RUNTIME_MODE` | No | `full-access` (default), `auto`, `auto-accept-edits` or `approval-required`. It can never exceed the mode approved at sign-in. |
 | `WAIT_TIMEOUT_MS` | No | How long Slack waits for an answer, default 2 hours. |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_ALLOWED_USERS` | All or none | Turns Slack on. Users are Slack user ids, comma separated. |
