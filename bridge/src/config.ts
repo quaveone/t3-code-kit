@@ -15,6 +15,7 @@ export type Config = {
 	defaultProject: string | undefined;
 	defaultBaseRef: string;
 	reposRoot: string;
+	modelSelection: { instanceId: string; model: string };
 	runtimeMode: "approval-required" | "auto-accept-edits" | "auto" | "full-access";
 	waitTimeoutMs: number;
 	slack: SlackConfig | undefined;
@@ -49,6 +50,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		defaultProject: env.DEFAULT_PROJECT?.trim() || undefined,
 		defaultBaseRef: env.DEFAULT_BASE_REF?.trim() || "main",
 		reposRoot: (env.T3_REPOS_ROOT?.trim() || "/data/home/repos").replace(/\/$/, ""),
+		modelSelection: {
+			instanceId: env.T3_PROVIDER_INSTANCE?.trim() || "claudeAgent",
+			model: env.T3_MODEL?.trim() || "claude-sonnet-5-5",
+		},
 		runtimeMode,
 		waitTimeoutMs: Number(env.WAIT_TIMEOUT_MS ?? 2 * 60 * 60 * 1000),
 		slack:

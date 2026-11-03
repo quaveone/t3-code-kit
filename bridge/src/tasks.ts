@@ -3,6 +3,16 @@ import type { T3Client } from "./t3-client.ts";
 
 type Project = { id: string; title: string; workspaceRoot?: string };
 
+type ThreadItem = {
+	itemId: string;
+	type: string;
+	createdBy?: string | null;
+	text?: string | null;
+	textTruncated?: boolean;
+	nextTextOffset?: number | null;
+};
+type ThreadPage = { thread?: { link?: string | null }; items?: ThreadItem[]; nextPosition?: number | null; hasMore?: boolean };
+
 export type TaskRequest = {
 	project?: string;
 	message: string;
@@ -39,7 +49,11 @@ export class Tasks {
 			{ provider: "github", repository, destinationPath, protocol: "https" },
 			10 * 60 * 1000,
 		);
-		return (await this.t3.call("t3_project_create", { title: name, workspaceRoot: destinationPath })) as Project;
+		return (await this.t3.call("t3_project_create", {
+			title: name,
+			workspaceRoot: destinationPath,
+			defaultModelSelection: this.config.modelSelection,
+		})) as Project;
 	}
 
 	/** Resolves a project by id or case-insensitive title, falling back to DEFAULT_PROJECT. */
@@ -62,6 +76,7 @@ export class Tasks {
 			projectId: project.id,
 			title,
 			message: request.message,
+			modelSelection: this.config.modelSelection,
 			runtimeMode: this.config.runtimeMode,
 			...(baseRef ? { workspaceStrategy: { type: "worktree", baseRef, startFromOrigin: true } } : {}),
 			...(request.clientRequestId ? { clientRequestId: request.clientRequestId } : {}),
@@ -75,8 +90,47 @@ export class Tasks {
 		return this.t3.call("t3_thread_send", { threadId: taskId, message, mode: "auto" });
 	}
 
-	async read(taskId: string, limit = 6): Promise<unknown> {
-		return this.t3.call("t3_thread_read", { threadId: taskId, limit, maxCharsPerItem: 6000 });
+	/**
+	 * Returns the thread and its newest `limit` messages. T3 pages oldest first, so this walks to the end
+	 * cheaply (1 character per item) and then reads the newest items in full.
+	 */
+	async read(taskId: string, limit = 6): Promise<{ thread: unknown; items: ThreadItem[] }> {
+		let afterPosition: number | undefined;
+		let thread: unknown;
+		let tail: ThreadItem[] = [];
+		for (let page = 0; page < 100; page++) {
+			const result = (await this.t3.call("t3_thread_read", {
+				threadId: taskId,
+				limit: 100,
+				maxCharsPerItem: 1,
+				...(afterPosition === undefined ? {} : { afterPosition }),
+			})) as ThreadPage;
+			thread = result.thread;
+			tail = [...tail, ...(result.items ?? [])].slice(-limit);
+			if (!result.hasMore || result.nextPosition == null) break;
+			afterPosition = result.nextPosition;
+		}
+		const items = await Promise.all(tail.map((item) => this.fullItem(taskId, item)));
+		return { thread, items };
+	}
+
+	/** Reads one item's full text, following `nextTextOffset` up to a 50k-character cap. */
+	private async fullItem(taskId: string, item: ThreadItem): Promise<ThreadItem> {
+		let text = "";
+		let textOffset: number | null | undefined = 0;
+		while (textOffset != null && text.length < 50_000) {
+			const result = (await this.t3.call("t3_thread_read", {
+				threadId: taskId,
+				itemId: item.itemId,
+				textOffset,
+				maxCharsPerItem: 10_000,
+			})) as ThreadPage;
+			const part = result.items?.[0];
+			if (!part) break;
+			text += part.text ?? "";
+			textOffset = part.textTruncated ? part.nextTextOffset : null;
+		}
+		return { ...item, text, textTruncated: false };
 	}
 
 	/** Waits until the thread's latest run settles, polling T3 in bounded slices. */
@@ -91,11 +145,12 @@ export class Tasks {
 			);
 			if (!isStillRunning(last)) break;
 		}
-		const read = (await this.read(taskId, 4)) as Record<string, unknown>;
+		const read = await this.read(taskId, 4);
+		const thread = read.thread as { link?: string | null } | undefined;
 		return {
 			status: statusOf(last) ?? "unknown",
 			reply: lastAssistantText(read) ?? "(no reply text)",
-			link: typeof read.link === "string" ? read.link : undefined,
+			link: thread?.link ?? undefined,
 		};
 	}
 }
@@ -115,7 +170,7 @@ function statusOf(raw: unknown): string | undefined {
 	if (!raw || typeof raw !== "object") return undefined;
 	const value = raw as Record<string, unknown>;
 	for (const key of ["status", "state"]) if (typeof value[key] === "string") return value[key] as string;
-	const run = (value.run ?? value.resultRun) as Record<string, unknown> | undefined;
+	const run = value.resultRun as Record<string, unknown> | undefined;
 	if (run && typeof run.status === "string") return run.status;
 	return undefined;
 }
@@ -126,16 +181,11 @@ function isStillRunning(raw: unknown): boolean {
 	return status === "running" || status === "starting" || status === "queued" || status === "preparing";
 }
 
-/** Finds the newest assistant message text in a `t3_thread_read` result. */
-export function lastAssistantText(read: Record<string, unknown>): string | undefined {
-	const items = (read.items ?? read.messages) as Record<string, unknown>[] | undefined;
-	if (!Array.isArray(items)) return undefined;
+/** Finds the newest assistant message text in a thread read (`type: "assistant_message"`). */
+export function lastAssistantText(read: { items?: { type?: string; text?: string | null }[] }): string | undefined {
+	const items = read.items ?? [];
 	for (const item of [...items].reverse()) {
-		const role = item.role ?? item.kind ?? item.type;
-		if (role === "assistant" || role === "assistant_message") {
-			const text = item.text ?? item.content ?? item.markdown;
-			if (typeof text === "string" && text.trim()) return text;
-		}
+		if (item.type === "assistant_message" && item.text?.trim()) return item.text;
 	}
 	return undefined;
 }
