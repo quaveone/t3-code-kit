@@ -106,8 +106,21 @@ Mention the bot in a channel it was invited to:
 when the agent finishes, and sends every later reply in that Slack thread to the same T3 thread. Only Slack user
 ids in `SLACK_ALLOWED_USERS` are served.
 
-Create the Slack app from `bridge/slack-manifest.json` (replace the host), install it, invite it to the
-channel, and set the three `SLACK_*` variables.
+Set up the Slack app (verified on 2026-11-03):
+
+1. Generate an app configuration token at <https://api.slack.com/apps> (**Your App Configuration Tokens**).
+2. Create the app with `apps.manifest.create` from `bridge/slack-manifest.json`, with the host replaced, but
+   **without** `event_subscriptions` first. The response holds the signing secret.
+3. Install it with the OAuth link
+   (`https://slack.com/oauth/v2/authorize?client_id=…&scope=…&redirect_uri=<PUBLIC_URL>/slack/oauth`), then exchange
+   the returned `code` with `oauth.v2.access` for the bot token. The bridge does not serve `/slack/oauth`; the code is
+   read from the redirect URL.
+4. Set `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` and `SLACK_ALLOWED_USERS` on the bridge and redeploy.
+5. Add `event_subscriptions` with `apps.manifest.update`. Slack verifies the URL against the running bridge.
+6. Invite the bot to a channel, or let it join a public one with `conversations.join` (needs `channels:join`).
+
+Messages sent through other Slack apps (for example "Sent using Claude") arrive with a `bot_id` and a mention
+footer; the bridge still treats them as the person's message. Only the bridge's own posts are ignored.
 
 ### Bridge environment variables
 
