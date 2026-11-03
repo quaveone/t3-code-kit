@@ -51,6 +51,18 @@ The entrypoint starts as root only to give `/data` to the `t3` user (platforms o
 persistent volume, so threads, projects, pairings, Claude's own settings and cloned repositories survive
 redeploys. The command is `t3 serve --host 0.0.0.0 --port 3773 --base-dir /data/t3`.
 
+Agents install the toolchains they need (for example `bun` or `node`) into `$HOME` on the volume, so they are
+installed once and reused by every later thread. The image stays small and does not guess project toolchains.
+
+### Capacity (measured 2026-11-03, 4 CPU / 4 GB)
+
+| Parallel Claude threads | Result |
+| --- | --- |
+| 1, 2, 4, 8 | All completed. CPU peak 0.75 core. Memory 0.63 GB idle, about 3.0 GB with 8 active threads. |
+
+Memory is the limit, at about 300 MB per active thread on small repositories. Plan for 8 parallel threads on
+small repositories and 6 on repositories with heavy installs or builds per 4 GB server, and alert at 85% memory.
+
 ### Environment variables
 
 | Variable | Required | Meaning |
