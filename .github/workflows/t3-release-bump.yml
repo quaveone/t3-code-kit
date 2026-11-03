@@ -1,0 +1,48 @@
+name: T3 stable release bump
+
+# Follows T3 Code stable releases only (never main or nightly) and opens one PR per release.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the pinned version with the latest stable release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name | sed 's/^v//')"
+          pinned="$(sed -n 's/^ARG T3_VERSION=//p' image/Dockerfile)"
+          echo "latest=$latest pinned=$pinned"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          [ "$latest" != "$pinned" ] && echo "changed=true" >> "$GITHUB_OUTPUT" || true
+      - name: Open the bump PR
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.check.outputs.latest }}
+        run: |
+          branch="t3/bump-${LATEST}"
+          if gh pr list --head "$branch" --state open --json number --jq 'length' | grep -qv '^0$'; then
+            echo "PR already open"; exit 0
+          fi
+          sed -i "s/^ARG T3_VERSION=.*/ARG T3_VERSION=${LATEST}/" image/Dockerfile
+          # PRs opened with GITHUB_TOKEN do not trigger CI, so prove the new release here first.
+          docker build -t t3-code:bump image
+          scripts/smoke-image.sh t3-code:bump
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "chore(image): bump T3 Code to v${LATEST}"
+          git push -u origin "$branch"
+          gh pr create --title "Bump T3 Code to v${LATEST}" \
+            --body "Upstream stable release: https://github.com/pingdotgg/t3code/releases/tag/v${LATEST}. This workflow built the image and passed the smoke test before opening the PR. Merge, then move environments to the new tag, then move environments to the new tag."

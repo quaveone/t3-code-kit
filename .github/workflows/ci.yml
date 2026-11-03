@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+  images:
+    runs-on: ubuntu-latest
+    needs: bridge
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the pinned T3 version
+        id: t3
+        run: echo "version=$(sed -n 's/^ARG T3_VERSION=//p' image/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - name: Build the T3 image
+        run: docker build -t t3-code:ci image
+      - name: Smoke test the T3 image
+        run: scripts/smoke-image.sh t3-code:ci
+      - name: Build the bridge image
+        run: docker build -t t3-bridge:ci bridge
+      - name: Publish images
+        if: github.event_name == 'push'
+        env:
+          T3_VERSION: ${{ steps.t3.outputs.version }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          rev="$(git rev-parse --short HEAD)"
+          for tag in "${T3_VERSION}-${rev}" "${T3_VERSION}" latest; do
+            docker tag t3-code:ci "ghcr.io/quaveone/t3-code:${tag}"
+            docker push "ghcr.io/quaveone/t3-code:${tag}"
+          done
+          for tag in "${rev}" latest; do
+            docker tag t3-bridge:ci "ghcr.io/quaveone/t3-bridge:${tag}"
+            docker push "ghcr.io/quaveone/t3-bridge:${tag}"
+          done

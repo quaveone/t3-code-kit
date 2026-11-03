@@ -1,0 +1,23 @@
+{
+  "display_information": {
+    "name": "T3",
+    "description": "Starts and continues T3 Code threads from Slack."
+  },
+  "features": {
+    "bot_user": { "display_name": "T3", "always_online": true }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["app_mentions:read", "chat:write", "channels:history", "groups:history"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://BRIDGE_HOST/slack/events",
+      "bot_events": ["app_mention", "message.channels", "message.groups"]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
