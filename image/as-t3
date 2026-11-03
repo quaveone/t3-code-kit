@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs a command as the `t3` user with T3's environment, for console sessions that open as root.
+set -euo pipefail
+if [ "$(id -u)" = "0" ]; then exec setpriv --reuid=1000 --regid=1000 --init-groups "$@"; fi
+exec "$@"

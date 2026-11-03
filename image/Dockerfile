@@ -1,4 +1,5 @@
-# T3 Code server, run as-is. Installs a pinned upstream stable release; no patches.
+# T3 Code server, run as-is. The entrypoint starts as root only to fix /data ownership, then runs as `t3`.
+# Installs a pinned upstream stable release; no patches.
 FROM debian:bookworm-slim
 
 ARG T3_VERSION=0.1.6
@@ -53,9 +54,9 @@ RUN useradd --create-home --home-dir /home/t3 --uid 1000 --shell /bin/bash t3 \
     && mkdir -p /data && chown t3:t3 /data
 
 COPY entrypoint.sh /usr/local/bin/t3-entrypoint
-RUN chmod 0755 /usr/local/bin/t3-entrypoint
+COPY as-t3 /usr/local/bin/as-t3
+RUN chmod 0755 /usr/local/bin/t3-entrypoint /usr/local/bin/as-t3
 
-USER t3
 ENV HOME=/data/home \
     T3CODE_HOME=/data/t3 \
     T3_PORT=3773 \

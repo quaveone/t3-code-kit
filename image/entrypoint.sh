@@ -2,6 +2,14 @@
 # Prepares the persistent HOME, optional integrations, then runs `t3 serve` in the foreground.
 set -euo pipefail
 
+# Platforms often mount the volume owned by root. Fix ownership as root once, then drop to `t3`.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /data
+  # Also repairs files a root console session created (use `as-t3 <command>` to avoid that).
+  find /data ! -user 1000 -exec chown -h 1000:1000 {} + 2>/dev/null || true
+  exec setpriv --reuid=1000 --regid=1000 --init-groups "$0" "$@"
+fi
+
 mkdir -p "$HOME" "$T3CODE_HOME" "$HOME/repos"
 
 # Subscription only: Claude Code prefers an API key over the subscription token when both exist,

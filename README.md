@@ -47,7 +47,7 @@ This repository is **not a fork** of T3 Code. It never patches T3. It only uses 
 | `git`, `gh`, `sqlite3`, `jq` | From Debian and GitHub's apt repositories. |
 | Chrome runtime libraries | For T3's built-in browser. Chrome downloads into `/data` on first use. |
 
-The image runs as the non-root user `t3`. `HOME=/data/home` and `T3CODE_HOME=/data/t3` both live on the
+The entrypoint starts as root only to give `/data` to the `t3` user (platforms often mount volumes owned by root), then runs T3 as the non-root user `t3`. In a console that opens as root, prefix commands with `as-t3`, for example `as-t3 t3 pair`. `HOME=/data/home` and `T3CODE_HOME=/data/t3` both live on the
 persistent volume, so threads, projects, pairings, Claude's own settings and cloned repositories survive
 redeploys. The command is `t3 serve --host 0.0.0.0 --port 3773 --base-dir /data/t3`.
 
@@ -65,7 +65,7 @@ redeploys. The command is `t3 serve --host 0.0.0.0 --port 3773 --base-dir /data/
 
 1. Deploy the image with a persistent volume at `/data` (30 GB is a good start), one container, health check
    `GET /` on port 3773.
-2. Open a shell in the container and run `t3 pair`. Open the pairing link, or scan the QR code, from the T3
+2. Open a shell in the container and run `as-t3 t3 pair`. Open the pairing link, or scan the QR code, from the T3
    desktop or mobile app. The server log also prints a one-time pairing link at start, so treat logs as
    sensitive.
 3. Add projects from the app, or ask an agent to clone with T3's own tools.
@@ -128,7 +128,7 @@ T3 approves outside agents with a pairing code, and a grant lasts **30 days**; T
 
 1. `curl -X POST -H "Authorization: Bearer $BRIDGE_TOKEN" https://<bridge>/v1/t3/login`, then open the returned
    URL.
-2. On the T3 page, choose **Full access** (or a lower mode) and enter a pairing code from `t3 auth pairing create`
+2. On the T3 page, choose **Full access** (or a lower mode) and enter a pairing code from `as-t3 t3 auth pairing create`
    in the T3 container, or from **Settings → Sharing & access** in the T3 app.
 3. Approve. T3 redirects to `<PUBLIC_URL>/oauth/callback` and the bridge stores the grant.
 
