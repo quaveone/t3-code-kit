@@ -62,7 +62,8 @@ On the T3 server environment:
 2. Turn on image auto-deploy [`update-app-env-image-auto-deploy` with `enabled: true`]. Quave ONE checks the tag every
    few minutes and deploys the exact new digest through the normal deploy flow.
 
-Do the same for the bridge with `ghcr.io/quaveone/t3-bridge:stable`. The **T3 Code** Solution installs `:stable`.
+Do the same for the bridge with `ghcr.io/quaveone/t3-bridge:stable`. The **T3 Code** Solution installs `:stable` with
+image auto-deploy already on, so a server from the catalog needs no extra step.
 
 On plain Docker, use a tag watcher such as Watchtower on `:stable`, or redeploy from your own scheduler.
 

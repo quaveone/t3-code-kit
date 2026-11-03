@@ -22,7 +22,7 @@ environment with:
 - a persistent volume at `/data`;
 - one container, 4 CPU and 4 GB (8 zClouds).
 
-Then turn on image auto-deploy on the environment so it follows `:stable` [`update-app-env-image-auto-deploy`].
+Image auto-deploy is already on, so the server follows `:stable` and updates itself. See [releases.md](releases.md).
 
 The Quave ONE public docs describe the Solution: <https://docs.quave.one/solutions/t3-code>.
 
