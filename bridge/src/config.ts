@@ -1,5 +1,6 @@
 /** Environment-only configuration. Invalid or missing required values fail at start. */
 export type SlackConfig = {
+	apiUrl: string;
 	botToken: string;
 	signingSecret: string;
 	allowedUsers: Set<string>;
@@ -53,6 +54,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 		slack:
 			slackSet.length === slackKeys.length
 				? {
+						apiUrl: (env.SLACK_API_URL?.trim() || "https://slack.com/api").replace(/\/$/, ""),
 						botToken: required(env, "SLACK_BOT_TOKEN"),
 						signingSecret: required(env, "SLACK_SIGNING_SECRET"),
 						allowedUsers: new Set(required(env, "SLACK_ALLOWED_USERS").split(/[\s,]+/).filter(Boolean)),

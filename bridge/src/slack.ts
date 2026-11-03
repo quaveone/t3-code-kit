@@ -116,7 +116,7 @@ export class SlackBridge {
 	}
 
 	private async post(channel: string, threadTs: string, text: string): Promise<void> {
-		const response = await fetch("https://slack.com/api/chat.postMessage", {
+		const response = await fetch(`${this.config.apiUrl}/chat.postMessage`, {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${this.config.botToken}`,
