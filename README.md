@@ -204,7 +204,7 @@ More in [docs/setup-docker.md](docs/setup-docker.md).
 
 | Guide | Read it for |
 | --- | --- |
-| [Set up on Quave ONE](docs/setup-quave-one.md) | The setup in more depth, including building from source |
+| [Set up on Quave ONE](docs/setup-quave-one.md) | Building from source, the restore drill, secrets handling for agents |
 | [Run with Docker](docs/setup-docker.md) | Any Linux host with Docker |
 | [Claude on a subscription](docs/claude-subscription.md) | Creating, checking and rotating the subscription token |
 | [The bridge: REST and Slack](docs/bridge.md) | Configuration, OAuth sign-in, REST API reference, Slack app setup |
