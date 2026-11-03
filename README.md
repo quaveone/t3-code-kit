@@ -15,22 +15,23 @@ This is not a fork. The kit never patches T3; it only uses T3's public surfaces.
 
 This runbook is written so that a person, or an agent with the Quave ONE MCP, can follow it from top to bottom. Tool
 names in brackets are Quave ONE MCP tools; the dashboard has the same actions. Two steps need the person who will use
-the server; they are marked **(person)**. Allow about 20 minutes.
+the server; they are marked **(person)**. Do the steps in order: pairing comes last because every restart invalidates
+the pairing link. Allow about 20 minutes.
 
 ### 0. Decide and collect
 
 | Item | Default | Who |
 | --- | --- | --- |
 | Quave ONE account | The person's account, or a team account where only trusted people have **Secrets Access** | Agent |
-| Region | A region where [`list-regions`] shows `volumeEnabled: true` and `canCreateEnvironment: true`, for example `us-5`, `eu-3`, `eu-4` or `br-1` | Agent |
-| Name | `t3-<person>`, for example `t3-filipe` | Agent |
+| Region | From [`list-regions`] for the account: one with `volumeEnabled: true` and `canCreateEnvironment: true`. Prefer `defaultRegion` when it qualifies; otherwise the region where the account already runs apps. Step 2 tells you if a region cannot provision the volume. | Agent |
+| App name | `t3-<person>`, for example `t3-filipe` | Agent |
 | Claude subscription token | Created by `claude setup-token` with the person's Claude Pro or Max account | **(person)** |
 | GitHub token | Write access only to the repositories the agents will work on | Person or agent |
 
 One server serves one person: a Claude subscription belongs to one person, and the agents on the server can read
 every secret on it.
 
-**Agents: never ask for a token in chat.** The person enters secret values directly in the dashboard (step 3), or
+**Agents: never ask for a token in chat.** The person enters secret values directly in the dashboard (step 4), or
 gives them through your secret-input tool.
 
 ### 1. Create the server
@@ -42,11 +43,15 @@ gives them through your secret-input tool.
 { "accountId": "<account>", "solutionSlug": "t3-code", "appName": "t3-<person>", "region": "<region>" }
 ```
 
-In the dashboard: **New project → Solutions → T3 Code**. The Solution creates one environment that runs
-`ghcr.io/quaveone/t3-code:stable` on port 3773, with a persistent volume at `/data`, 1 container, 8 zClouds (4 CPU,
-4 GB) and image auto-deploy on. Note the returned `appEnvId`.
+Leave the optional inputs `claudeCodeOauthToken` and `githubToken` empty when an agent installs; the person adds the
+secrets in step 4. When the **person** installs from the dashboard (**New project → Solutions → T3 Code**), they can
+type both tokens in the form instead and skip step 4.
 
-**Option B, by hand** (when the account has no `t3-code` in the catalog):
+The Solution creates one environment that runs `ghcr.io/quaveone/t3-code:stable` on port 3773, with a persistent
+volume at `/data`, 1 container, 8 zClouds (4 CPU, 4 GB) and image auto-deploy on. Note the returned `appEnvId`. Ignore
+the catalog's post-install note about the Console: step 7 below pairs without one.
+
+**Option B, by hand** (only when the account has no `t3-code` in the catalog):
 
 1. [`create-app`] with `{ "name": "t3-<person>", "accountId": "<account>", "port": 3773, "dockerPreset": "CUSTOM",
    "useImage": true, "isCliDeployment": true, "healthCheckPath": "/" }`.
@@ -55,14 +60,25 @@ In the dashboard: **New project → Solutions → T3 Code**. The Solution create
 3. [`update-app-env-volume`] with `{ "appEnvId": "<env>", "useVolume": true, "volumePath": "/data" }`.
 4. [`apply-app-env-changes`], then [`update-app-env-image-auto-deploy`] with `{ "appEnvId": "<env>", "enabled": true }`.
 
-### 2. Give it disk
+### 2. Wait until it runs
 
-The volume starts at the account's default size (often 1 GB). Repositories and worktrees need more: set
-[`update-app-env-resources`] `{ "appEnvId": "<env>", "disk": 30000, "applyImmediately": true }` (30 GB). If it is
-refused with "maximum disk size", ask Quave ONE support to raise the account's app volume limit, then retry. The disk
-can only grow.
+Poll [`get-app-env-status`] every 15 seconds until `currentDeployment.status` is `DEPLOYED` (usually under a
+minute). If it is still not deployed after 10 minutes, check [`get-app-env-pods`]: a pod in `Pending` with no
+`nodeName` means the region cannot provision the volume. Delete the app [`delete-app`] and go back to step 1 with the
+next qualifying region.
 
-### 3. Add the secrets **(person)**
+### 3. Give it disk
+
+The volume starts at the account's default size (often 1 GB). Repositories and worktrees need more. Only once step 2
+shows `DEPLOYED`, set [`update-app-env-resources`] `{ "appEnvId": "<env>", "disk": 30000, "applyImmediately": true }`
+(30 GB). The disk grows without a restart.
+
+- "can only be expanded while the environment is Running": step 2 is not finished; wait and retry.
+- "maximum disk size": ask Quave ONE support to raise the account's app volume limit, then retry.
+
+### 4. Add the secrets **(person)**
+
+Skip this step if the person typed both tokens in the install form.
 
 The person creates the Claude token on any computer with a browser:
 
@@ -70,7 +86,8 @@ The person creates the Claude token on any computer with a browser:
 claude setup-token     # sign in with the Claude account, approve, paste the code back, copy the sk-ant-oat01-... token
 ```
 
-Then, in the dashboard, opens the environment → **Settings → Environment variables** and adds, each marked **secret**:
+Then, in the dashboard, the person opens the environment → **Settings → Environment variables**, adds each of these
+marked **secret**, and saves and applies the changes (the dashboard asks to apply; this restarts the server):
 
 | Variable | Value |
 | --- | --- |
@@ -80,71 +97,86 @@ Then, in the dashboard, opens the environment → **Settings → Environment var
 Optional, not secret: `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` for the agents' commits.
 
 Optional, to give the agents the Quave ONE MCP: create an MCP key with only the scopes the agents need
-[`create-mcp-key`], add it as the secret `QUAVE_ONE_MCP_KEY`, and add:
+[`create-mcp-key`], add it as the secret `QUAVE_ONE_MCP_KEY`, and add (not secret):
 
 ```text
 MCP_SERVERS_JSON={"quave-one":{"url":"https://mcp.quave.cloud/","bearerEnv":"QUAVE_ONE_MCP_KEY"}}
 ```
 
-Apply the changes [`apply-app-env-changes`]. The server restarts with the secrets.
+**Agent:** wait until the person says the secrets are saved. Then confirm with [`list-app-env-variables`] that
+`CLAUDE_CODE_OAUTH_TOKEN` and `GH_TOKEN` exist (values stay masked). If [`get-app-env`] still shows
+`pendingChanges.hasDeployChanges: true`, call [`apply-app-env-changes`]. Then repeat step 2.
 
-### 4. Check it is up
+### 5. Check it is up
 
-Find the host with [`get-app-env`] (`hosts[0].host`) and wait for the deploy [`get-app-env-status`]:
+Find the host with [`get-app-env`] (`hosts[0].host`):
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' https://<host>/                           # 200
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/api/projects/mutate  # 401 (no session)
 ```
 
-### 5. Pair the person's apps **(person)**
+### 6. Protect it
 
-Pairing needs a one-time code, which the server prints in its log every time it starts:
+1. Snapshots: [`update-app-env-snapshot-options`] `{ "appEnvId": "<env>", "snapshotFrequency": "EVERY_HOUR",
+   "fullSnapshotPeriod": "EVERY_7_DAYS" }`.
+2. Contact point for the person: [`create-contact-point`] `{ "accountId": "<account>", "name": "<person> email",
+   "type": "email", "config": { "addresses": ["<person's email>"] } }`.
+3. Alerts, each with [`create-alert`], `appEnvId` set and `contactPointNames: ["<person> email"]`:
 
-1. [`get-logs`] with `{ "appEnvId": "<env>", "type": "WEB_APP", "search": "Pairing URL" }`. The newest line looks like
-   `Pairing URL: http://10.x.x.x:3773/pair#token=<code>`.
+   | `name` | `metric` | `operator` | `threshold` | `duration` |
+   | --- | --- | --- | --- | --- |
+   | `T3 high memory` | `memory_percent` | `gt` | 85 | `5m` |
+   | `T3 high CPU` | `cpu_percent` | `gt` | 90 | `10m` |
+   | `T3 disk usage` | `disk_usage_percent` | `gt` | 80 | `10m` |
+
+   Leave `aggregation` and `queryRange` at their defaults.
+
+### 7. Pair the person's apps **(person)**
+
+Do this last: the link below stops working at the next restart. Pairing needs a one-time code, which the server
+prints in its log every time it starts:
+
+1. [`get-logs`] with `{ "appEnvId": "<env>", "type": "WEB_APP", "search": "Pairing URL" }`. Take the newest line, which
+   looks like `Pairing URL: http://10.x.x.x:3773/pair#token=<code>`.
 2. Replace the internal address with the public host: `https://<host>/pair#token=<code>`.
-3. The person opens that link in a browser (this pairs the T3 web app) or pastes it into the T3 desktop or mobile app.
+3. Send the link to the person privately. They open it in a browser (this pairs the T3 web app), or paste it into the
+   T3 desktop or mobile app. The page then shows **Welcome** with **Add project**.
 
 Each link works once. For another device, either open the environment **Console** and run `as-t3 t3 pair`, or
 redeploy [`redeploy-app-env`] and take the new link from the log. Paired devices can also invite others from
 **Settings → Sharing & access** in the T3 app.
 
-### 6. Protect it
-
-1. Snapshots: [`update-app-env-snapshot-options`] `{ "appEnvId": "<env>", "snapshotFrequency": "EVERY_HOUR",
-   "fullSnapshotPeriod": "EVERY_7_DAYS" }`.
-2. Alerts: create a contact point for the person [`create-contact-point`], then [`create-alert`] on `memory_percent >
-   85` for `5m`, `cpu_percent > 90` for `10m` and `disk_usage_percent > 80` for `10m`.
-
-### 7. Hand it over
+### 8. Hand it over
 
 Send the person:
 
 - the host `https://<host>`;
-- the fact that updates are automatic: the server follows `:stable` and restarts for about a minute when a new
-  release arrives;
-- that work is done in **projects**: in the T3 app, **Add project** and clone a repository.
+- that updates are automatic: the server follows `:stable` and restarts for about a minute when a new release
+  arrives;
+- that work happens in **projects**: in the T3 app, **Add project** and clone a repository.
 
 ### Verify the setup
 
 - [ ] `GET https://<host>/` returns 200 and the API returns 401 without a session.
-- [ ] [`get-app-env`] shows `useVolume: true`, `volumePath: "/data"`, `containers: 1` and `imageAutoDeploy.enabled: true`.
-- [ ] The secrets list contains `CLAUDE_CODE_OAUTH_TOKEN` and `GH_TOKEN` (values masked).
+- [ ] [`get-app-env`] shows `useVolume: true`, `volumePath: "/data"`, `containers: 1`, `disk: 30000` and
+      `imageAutoDeploy.enabled: true`.
+- [ ] [`list-app-env-variables`] lists `CLAUDE_CODE_OAUTH_TOKEN` and `GH_TOKEN` (values masked).
 - [ ] The person is paired, and a first thread on a project answers.
-- [ ] Snapshots and alerts are configured.
+- [ ] Snapshots and the three alerts are configured.
 
 ### If something goes wrong
 
 | Symptom | Fix |
 | --- | --- |
 | `list-solutions` has no `t3-code` | Use Option B. The catalog entry may not be released to that installation yet. |
-| Pod stays `Pending` for more than 10 minutes | The region could not provision the volume. Delete the environment and use another region. |
-| Disk change refused ("maximum disk size") | Ask Quave ONE support to raise the account's app volume limit. |
-| A thread says `Not logged in · Please run /login` | `CLAUDE_CODE_OAUTH_TOKEN` is missing, wrong or expired. The person creates a new one (step 3). |
+| Pod stays `Pending` with no node | The region could not provision the volume. Delete the app and use another region (step 2). |
+| Disk change refused | See step 3. |
+| A thread says `Not logged in · Please run /login` | `CLAUDE_CODE_OAUTH_TOKEN` is missing, wrong or expired. The person creates a new one (step 4). |
 | Agents cannot push | `GH_TOKEN` lacks write access to that repository. |
-| The pairing link says it is invalid | It was already used, or the server restarted. Take the newest `Pairing URL` from the log. |
+| The pairing link says it is invalid | It was already used, or the server restarted after you took it. Take the newest `Pairing URL` from the log. |
 | Memory alert fires | Too many threads at once: about 300 MB each, 6 to 8 at a time on 4 GB. Add a second server. |
+| [`get-app-env`] shows `blueGreenDeploy: true` | Harmless on this setup: an environment with a local volume never runs a blue-green deploy. |
 
 For Slack and a REST API on top of the server, add the [bridge](docs/bridge.md).
 
