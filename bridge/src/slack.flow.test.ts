@@ -9,6 +9,7 @@ const posts: { channel: string; thread_ts: string; text: string }[] = [];
 const slackApi = Bun.serve({
 	port: 0,
 	async fetch(request) {
+		if (new URL(request.url).pathname === "/auth.test") return Response.json({ ok: true, user_id: "UBOT" });
 		posts.push((await request.json()) as (typeof posts)[number]);
 		return Response.json({ ok: true });
 	},
@@ -104,6 +105,27 @@ describe("SlackBridge flow", () => {
 		);
 		await Bun.sleep(50);
 		expect(calls.length).toBe(callCount);
+	});
+
+	test("accepts a reply a person sent through another app, and ignores the bot's own posts", async () => {
+		const before = calls.length;
+		await bridge.handle(
+			signedRequest({
+				type: "event_callback",
+				event_id: "Ev6",
+				event: { type: "message", user: "U1", bot_id: "BOTHER", text: "via app", channel: "C1", ts: "100.8", thread_ts: "100.1" },
+			}),
+		);
+		await bridge.handle(
+			signedRequest({
+				type: "event_callback",
+				event_id: "Ev7",
+				event: { type: "message", user: "UBOT", bot_id: "BME", text: "my own post", channel: "C1", ts: "100.9", thread_ts: "100.1" },
+			}),
+		);
+		await until(() => calls.length > before);
+		await Bun.sleep(50);
+		expect(calls.slice(before)).toEqual(["send:thread-1:via app"]);
 	});
 
 	test("ignores duplicate deliveries and unknown users", async () => {

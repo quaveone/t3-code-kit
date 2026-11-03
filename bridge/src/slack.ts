@@ -45,6 +45,8 @@ type SlackEvent = {
 };
 
 export class SlackBridge {
+	private botUserId: Promise<string | undefined> | undefined;
+
 	constructor(
 		private config: SlackConfig,
 		private store: Store,
@@ -74,8 +76,23 @@ export class SlackBridge {
 		return new Response("ok");
 	}
 
+	/** The bridge's own bot user id, from auth.test, so its own posts are never treated as requests. */
+	private ownUserId(): Promise<string | undefined> {
+		this.botUserId ??= fetch(`${this.config.apiUrl}/auth.test`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${this.config.botToken}` },
+		})
+			.then((response) => response.json() as Promise<{ ok: boolean; user_id?: string }>)
+			.then((result) => (result.ok ? result.user_id : undefined))
+			.catch(() => undefined);
+		return this.botUserId;
+	}
+
 	private async onEvent(event: SlackEvent): Promise<void> {
-		if (event.bot_id || event.subtype || !event.user || !event.channel || !event.ts) return;
+		// Messages a person sends through another app carry a bot_id too, so only the bridge's own
+		// user and edits, joins and other subtypes are skipped. SLACK_ALLOWED_USERS still gates requests.
+		if (event.subtype || !event.user || !event.channel || !event.ts) return;
+		if (event.user === (await this.ownUserId())) return;
 		const threadTs = event.thread_ts ?? event.ts;
 		const linked = this.store.t3ThreadFor(event.channel, threadTs);
 		const isMention = event.type === "app_mention";
