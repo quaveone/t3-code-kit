@@ -102,8 +102,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<host>/api/projects/mut
 Pairing needs a one-time code, which the server prints in its log every time it starts:
 
 1. [`get-logs`] with `{ "appEnvId": "<env>", "type": "WEB_APP", "search": "Pairing URL" }`. The newest line looks like
-   `Pairing URL: http://10.x.x.x:3773/pair#token=ABCD1234EFGH`.
-2. Replace the internal address with the public host: `https://<host>/pair#token=ABCD1234EFGH`.
+   `Pairing URL: http://10.x.x.x:3773/pair#token=<code>`.
+2. Replace the internal address with the public host: `https://<host>/pair#token=<code>`.
 3. The person opens that link in a browser (this pairs the T3 web app) or pastes it into the T3 desktop or mobile app.
 
 Each link works once. For another device, either open the environment **Console** and run `as-t3 t3 pair`, or
