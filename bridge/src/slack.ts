@@ -88,7 +88,24 @@ export class SlackBridge {
 		return this.botUserId;
 	}
 
+	/**
+	 * A mention posted by an allowed bot or incoming webhook. Webhook posts have no `user` and arrive as a
+	 * `bot_message`, sometimes also as an `app_mention`, so the channel and ts pick the single copy to act on.
+	 */
+	private async isAllowedBotMention(event: SlackEvent): Promise<boolean> {
+		if (event.user || !event.bot_id || !event.channel || !event.ts) return false;
+		if (!this.config.allowedBots.has(event.bot_id)) return false;
+		if (event.type !== "app_mention" && event.subtype !== "bot_message") return false;
+		const ownUserId = await this.ownUserId();
+		if (!ownUserId || !(event.text ?? "").includes(`<@${ownUserId}>`)) return false;
+		return this.store.firstSeen(`bot-mention-${event.channel}-${event.ts}`);
+	}
+
 	private async onEvent(event: SlackEvent): Promise<void> {
+		if (await this.isAllowedBotMention(event)) {
+			await this.run({ ...event, thread_ts: event.thread_ts ?? event.ts });
+			return;
+		}
 		// Messages a person sends through another app carry a bot_id too, so only the bridge's own
 		// user and edits, joins and other subtypes are skipped. SLACK_ALLOWED_USERS still gates requests.
 		if (event.subtype || !event.user || !event.channel || !event.ts) return;
@@ -108,33 +125,42 @@ export class SlackBridge {
 			if (isMention) await this.post(event.channel, threadTs, "You are not allowed to use this bridge.");
 			return;
 		}
+		await this.run(event);
+	}
+
+	/** Starts or continues the T3 thread for an event that already passed the access checks. */
+	private async run(event: SlackEvent): Promise<void> {
+		const channel = event.channel as string;
+		const ts = event.ts as string;
+		const threadTs = event.thread_ts ?? ts;
+		const linked = this.store.t3ThreadFor(channel, threadTs);
 		const { project, message } = parseMention(event.text ?? "");
 		if (!message) {
-			await this.post(event.channel, threadTs, "Usage: `@T3 [project] what to do`. Reply in the thread to continue.");
+			await this.post(channel, threadTs, "Usage: `@T3 [project] what to do`. Reply in the thread to continue.");
 			return;
 		}
 		try {
 			let taskId = linked;
 			if (taskId) {
 				await this.tasks.send(taskId, message);
-				await this.post(event.channel, threadTs, "Sent to the same T3 thread. Working on it…");
+				await this.post(channel, threadTs, "Sent to the same T3 thread. Working on it…");
 			} else {
 				const started = await this.tasks.start({
 					project,
 					message,
-					clientRequestId: `slack-${event.channel}-${event.ts}`,
+					clientRequestId: `slack-${channel}-${ts}`,
 				});
 				taskId = started.taskId;
-				this.store.linkSlackThread(event.channel, threadTs, taskId);
-				await this.post(event.channel, threadTs, `Started T3 thread \`${taskId}\`. I will post the answer here.`);
+				this.store.linkSlackThread(channel, threadTs, taskId);
+				await this.post(channel, threadTs, `Started T3 thread \`${taskId}\`. I will post the answer here.`);
 			}
 			const result = await this.tasks.waitForResult(taskId);
 			const header = `*${result.status}*${result.link ? ` · ${result.link}` : ""}\n`;
-			await this.post(event.channel, threadTs, header + truncate(result.reply));
+			await this.post(channel, threadTs, header + truncate(result.reply));
 		} catch (error) {
 			const text = error instanceof UserError ? error.message : "The bridge could not reach T3. Check its logs.";
 			if (!(error instanceof UserError)) console.error("task failed", error);
-			await this.post(event.channel, threadTs, text);
+			await this.post(channel, threadTs, text);
 		}
 	}
 

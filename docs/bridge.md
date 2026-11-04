@@ -33,6 +33,7 @@ The entrypoint gives `/data` to the `bun` user and then drops privileges, so a r
 | `T3_REPOS_ROOT` | No | Where `POST /v1/projects` clones repositories. Default `/data/home/repos`. |
 | `WAIT_TIMEOUT_MS` | No | How long Slack waits for an answer. Default 2 hours. |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_ALLOWED_USERS` | All or none | Turn Slack on. `SLACK_ALLOWED_USERS` is a comma-separated list of Slack user ids. |
+| `SLACK_ALLOWED_BOTS` | No | Comma-separated bot ids (`B...`) of Slack apps or incoming webhooks whose mentions of this bot start threads. Empty by default. |
 
 ## Sign the bridge in to T3
 
@@ -137,6 +138,9 @@ Notes:
 - Messages that a person sends through another Slack app (for example "Sent using Claude") carry a `bot_id` and a
   mention footer. The bridge still treats them as that person's message and ignores only its own posts.
 - A mention also arrives as a plain `message` event; the bridge acts on it once.
+- A program can start a thread by posting `<@BOT_USER_ID> [project] what happened` through an incoming webhook whose
+  bot id is in `SLACK_ALLOWED_BOTS`. Only the message `text` reaches T3, not its attachments or fields. Anyone holding
+  that webhook URL can start a thread, so store it as a secret.
 - Slack retries deliveries; the bridge drops repeated event ids.
 
 ## Run it locally
