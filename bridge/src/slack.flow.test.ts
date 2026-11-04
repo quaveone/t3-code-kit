@@ -33,7 +33,7 @@ const fakeTasks = {
 
 const secret = "signing-secret";
 const bridge = new SlackBridge(
-	{ apiUrl: `http://127.0.0.1:${slackApi.port}`, botToken: "xoxb-test", signingSecret: secret, allowedUsers: new Set(["U1"]) },
+	{ apiUrl: `http://127.0.0.1:${slackApi.port}`, botToken: "xoxb-test", signingSecret: secret, allowedUsers: new Set(["U1"]), allowedBots: new Set(["BHOOK"]) },
 	new Store(":memory:"),
 	fakeTasks,
 );
@@ -147,6 +147,26 @@ describe("SlackBridge flow", () => {
 		await until(() => posts.some((p) => p.text.includes("not allowed")));
 		expect(calls.length).toBe(callCount);
 		expect(posts.at(-1)?.text).toContain("not allowed");
+	});
+
+	test("serves a mention from an allowed webhook once, even when both event copies arrive", async () => {
+		const before = calls.length;
+		const event = { bot_id: "BHOOK", text: "<@UBOT> [sync] job failed", channel: "C2", ts: "200.1" };
+		await bridge.handle(signedRequest({ type: "event_callback", event_id: "Ev8", event: { ...event, type: "message", subtype: "bot_message" } }));
+		await bridge.handle(signedRequest({ type: "event_callback", event_id: "Ev9", event: { ...event, type: "app_mention" } }));
+		await until(() => calls.length > before);
+		await Bun.sleep(50);
+		expect(calls.slice(before)).toEqual(["start:sync:job failed"]);
+		expect(posts.at(-1)).toMatchObject({ channel: "C2", thread_ts: "200.1" });
+	});
+
+	test("ignores webhook posts that are not allowed or do not mention this bot", async () => {
+		const before = calls.length;
+		await bridge.handle(signedRequest({ type: "event_callback", event_id: "Ev10", event: { type: "message", subtype: "bot_message", bot_id: "BOTHER", text: "<@UBOT> do it", channel: "C2", ts: "200.2" } }));
+		await bridge.handle(signedRequest({ type: "event_callback", event_id: "Ev11", event: { type: "app_mention", bot_id: "BOTHER", text: "<@UBOT> do it", channel: "C2", ts: "200.3" } }));
+		await bridge.handle(signedRequest({ type: "event_callback", event_id: "Ev12", event: { type: "message", subtype: "bot_message", bot_id: "BHOOK", text: "no mention", channel: "C2", ts: "200.4" } }));
+		await Bun.sleep(50);
+		expect(calls.length).toBe(before);
 	});
 
 	test("rejects a bad signature", async () => {
