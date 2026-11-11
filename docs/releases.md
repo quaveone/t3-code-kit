@@ -103,12 +103,16 @@ digests and in the commit history.
 
 ## Watchdog
 
-A scheduled task outside GitHub checks the chain once a day:
+A scheduled task outside GitHub checks the chain every 6 hours:
 
-1. It compares the latest T3 stable release with the `kit.t3-version` label of `t3-code:stable`.
-2. If they differ and no bump is running, it dispatches the bump workflow and watches it.
-3. It checks that the release exists and that the servers with auto-deploy run the new digest.
+1. It compares the latest T3 stable release and the Claude Code `stable` channel with the pin and with the labels of
+   `t3-code:stable`.
+2. If upstream is newer and no bump is running, it dispatches the bump workflow and watches it and the CI run after it.
+3. It checks that the release exists and that `:stable` carries the new versions.
 4. It reports only when something is wrong.
+
+It checks the image chain only. Each server with auto-deploy picks up the new `:stable` on its own (see
+[Turn on automatic updates](#turn-on-automatic-updates-on-quave-one)).
 
 Any scheduler that can run `gh` works for this; the kit's maintainers run it from their agent workspace.
 
