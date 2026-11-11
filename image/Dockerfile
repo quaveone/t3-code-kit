@@ -2,7 +2,7 @@
 # Installs a pinned upstream stable release; no patches.
 FROM debian:bookworm-slim
 
-ARG T3_VERSION=0.1.8
+ARG T3_VERSION=0.1.9
 ARG T3_SHA256_X64=
 ARG T3_SHA256_ARM64=
 ARG CLAUDE_CODE_VERSION=2.1.311
